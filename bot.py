@@ -214,38 +214,69 @@ async def analyze_news_with_ai(news_title: str,
 
 
 async def analyze_ton_price_impact(news_title: str, news_content: str, lang: str = "ru") -> str:
-    """AI analysis of TON price growth/decline potential"""
-    if not OPENAI_API_KEY:
-        if "down" in news_title.lower() or "negative" in news_title.lower():
-            return "📉 **Вероятный спад** - Это новость может привести к падению цены TON" if lang == "ru" else "📉 **Likely Decline** - This news may cause TON price to fall"
-        elif "up" in news_title.lower() or "positive" in news_title.lower():
-            return "📈 **Вероятный рост** - Это новость может привести к росту цены TON" if lang == "ru" else "📈 **Likely Growth** - This news may cause TON price to rise"
-        else:
-            return "↔️ **Нейтральное влияние** - Минимальное влияние на цену TON" if lang == "ru" else "↔️ **Neutral Impact** - Minimal effect on TON price"
-    
+    """AI analysis of TON price growth/decline potential with detailed explanation"""
     try:
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         
-        lang_text = "Russian" if lang == "ru" else "English"
-        prompt = f"""Analyze this TON/crypto news and predict price impact in {lang_text}:
+        if lang == "ru":
+            prompt = f"""Ты опытный крипто-аналитик. Анализируй эту новость о TON и дай детальное объяснение влияния на цену.
+
+НОВОСТЬ:
+Заголовок: {news_title}
+Содержание: {news_content}
+
+ОБЯЗАТЕЛЬНО отвечай ТОЛЬКО в этом формате, БЕЗ никаких других слов:
+
+📈 **Прогноз цены TON: +X-Y%** ИЛИ 📉 **Прогноз цены TON: -X-Y%** ИЛИ ↔️ **Прогноз цены TON: 0-1%**
+
+**Почему это повлияет на цену TON:**
+[Очень подробное объяснение - 3-4 предложения]
+- Конкретно ЧТО в новости повлияет на цену?
+- КАК это повлияет (спрос, доверие, технология)?
+- КАКОЙ временной горизонт (часы, дни, недели)?
+
+ПРИМЕР ответа:
+📈 **Прогноз цены TON: +5-7%**
+
+**Почему это повлияет на цену TON:**
+Выступление Павла Дурова о новых партнёрствах значительно повышает доверие к экосистеме TON и привлекает институциональных инвесторов. Это увеличивает спрос на токен, что приводит к росту цены. Такие новости обычно влияют в течение 24-48 часов с максимальным скачком в первые 6 часов после публикации."""
+        else:
+            prompt = f"""You are an experienced crypto analyst. Analyze this TON news and provide detailed explanation of price impact.
+
+NEWS:
 Title: {news_title}
 Content: {news_content}
 
-Respond with ONLY one of these formats:
-📈 **[Growth/Рост]** - Brief explanation (max 15 words)
-📉 **[Decline/Спад]** - Brief explanation (max 15 words)
-↔️ **[Neutral/Нейтральное]** - Brief explanation (max 15 words)"""
+MUST respond ONLY in this format, with NO other text:
+
+📈 **TON Price Forecast: +X-Y%** OR 📉 **TON Price Forecast: -X-Y%** OR ↔️ **TON Price Forecast: 0-1%**
+
+**Why this will impact TON price:**
+[Very detailed explanation - 3-4 sentences]
+- Specifically WHAT in the news affects price?
+- HOW it will affect (demand, trust, technology)?
+- WHAT is the timeframe (hours, days, weeks)?
+
+EXAMPLE answer:
+📈 **TON Price Forecast: +3-6%**
+
+**Why this will impact TON price:**
+Pavel Durov's announcement of new partnerships significantly increases trust in the TON ecosystem and attracts institutional investors. This increases demand for the token, leading to price appreciation. Such news typically impacts within 24-48 hours with peak movement in the first 6 hours after announcement."""
         
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=80,
+            max_tokens=350,
             temperature=0.7
         )
         return response.choices[0].message.content
-    except:
-        return "📊 Analysis unavailable" if lang == "en" else "📊 Анализ недоступен"
+    except Exception as e:
+        print(f"AI Error: {e}")
+        if lang == "ru":
+            return f"❌ Ошибка AI анализа: {str(e)[:50]}\n\n🔑 Убедитесь, что OPENAI_API_KEY установлен в GitHub Secrets"
+        else:
+            return f"❌ AI analysis error: {str(e)[:50]}\n\nMake sure OPENAI_API_KEY is set in GitHub Secrets"
 
 
 async def get_ton_price():
