@@ -213,6 +213,41 @@ async def analyze_news_with_ai(news_title: str,
         return "Analysis unavailable" if lang == "en" else "📊 Анализ недоступен"
 
 
+async def analyze_ton_price_impact(news_title: str, news_content: str, lang: str = "ru") -> str:
+    """AI analysis of TON price growth/decline potential"""
+    if not OPENAI_API_KEY:
+        if "down" in news_title.lower() or "negative" in news_title.lower():
+            return "📉 **Вероятный спад** - Это новость может привести к падению цены TON" if lang == "ru" else "📉 **Likely Decline** - This news may cause TON price to fall"
+        elif "up" in news_title.lower() or "positive" in news_title.lower():
+            return "📈 **Вероятный рост** - Это новость может привести к росту цены TON" if lang == "ru" else "📈 **Likely Growth** - This news may cause TON price to rise"
+        else:
+            return "↔️ **Нейтральное влияние** - Минимальное влияние на цену TON" if lang == "ru" else "↔️ **Neutral Impact** - Minimal effect on TON price"
+    
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        
+        lang_text = "Russian" if lang == "ru" else "English"
+        prompt = f"""Analyze this TON/crypto news and predict price impact in {lang_text}:
+Title: {news_title}
+Content: {news_content}
+
+Respond with ONLY one of these formats:
+📈 **[Growth/Рост]** - Brief explanation (max 15 words)
+📉 **[Decline/Спад]** - Brief explanation (max 15 words)
+↔️ **[Neutral/Нейтральное]** - Brief explanation (max 15 words)"""
+        
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=80,
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except:
+        return "📊 Analysis unavailable" if lang == "en" else "📊 Анализ недоступен"
+
+
 async def get_ton_price():
     """Get TON price from Binance"""
     global price_cache
@@ -357,10 +392,12 @@ async def send_news_alert(app, chat_id, news: dict, user_lang: str = "ru"):
 
 ⏰ {datetime.now().strftime('%d.%m %H:%M')}"""
 
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")
-        ]])
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📊 Анализ цены" if user_lang == "ru" else "📊 Price Analysis", 
+                                 callback_data="price_impact")],
+            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+             InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")]
+        ])
 
         sent_msg = await app.bot.send_message(chat_id=chat_id,
                                               text=message,
@@ -696,6 +733,32 @@ All news in English now!
                                           parse_mode="HTML",
                                           reply_markup=keyboard)
         await query.answer("Язык изменен на русский")
+    
+    elif query.data == "price_impact":
+        user_lang = get_user_language(user_id)
+        if news_manager.last_news:
+            news = news_manager.last_news
+            price_analysis = await analyze_ton_price_impact(news["title"], news["content"], user_lang)
+            
+            if user_lang == "en":
+                message = f"""💹 <b>TON PRICE IMPACT ANALYSIS</b>
+
+📈 <b>News Impact:</b>
+{price_analysis}
+
+<b>How this affects TON:</b>
+This analysis predicts the potential short-term price movement based on the news sentiment and market relevance."""
+            else:
+                message = f"""💹 <b>АНАЛИЗ ВЛИЯНИЯ НА ЦЕНУ TON</b>
+
+📈 <b>Влияние новости:</b>
+{price_analysis}
+
+<b>Как это влияет на TON:</b>
+Этот анализ предсказывает возможное краткосрочное движение цены на основе тональности новости и её значимости для рынка."""
+            
+            await query.edit_message_text(message, parse_mode="HTML")
+            await query.answer("Analysis ready ✅" if user_lang == "en" else "Анализ готов ✅")
 
 
 async def monitor_news(app):
